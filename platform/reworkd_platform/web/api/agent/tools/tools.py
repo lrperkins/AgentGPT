@@ -1,18 +1,38 @@
-from typing import Type, List
+from typing import List, Type
 
+from reworkd_platform.web.api.agent.tools.code import Code
+from reworkd_platform.web.api.agent.tools.conclude import Conclude
 from reworkd_platform.web.api.agent.tools.image import Image
 from reworkd_platform.web.api.agent.tools.reason import Reason
 from reworkd_platform.web.api.agent.tools.search import Search
 from reworkd_platform.web.api.agent.tools.tool import Tool
-from reworkd_platform.web.api.agent.tools.wikipedia_search import Wikipedia
+
+
+def get_user_tools(tool_names: List[str]) -> List[Type[Tool]]:
+    return list(map(get_tool_from_name, tool_names)) + get_default_tools()
 
 
 def get_available_tools() -> List[Type[Tool]]:
+    return get_external_tools() + get_default_tools()
+
+
+def get_available_tools_names() -> List[str]:
+    return [get_tool_name(tool) for tool in get_available_tools()]
+
+
+def get_external_tools() -> List[Type[Tool]]:
     return [
-        Reason,
-        Wikipedia,
+        # Wikipedia,  # TODO: Remove if async doesn't work
         Image,
         Search,
+        Code,
+    ]
+
+
+def get_default_tools() -> List[Type[Tool]]:
+    return [
+        Reason,
+        Conclude,
     ]
 
 
@@ -24,11 +44,19 @@ def format_tool_name(tool_name: str) -> str:
     return tool_name.lower()
 
 
-def get_tools_overview() -> str:
+def get_tools_overview(tools: List[Type[Tool]]) -> str:
     """Return a formatted string of name: description pairs for all available tools"""
-    return "\n".join(
-        [f"{get_tool_name(tool)}: {tool.description}" for tool in get_available_tools()]
-    )
+
+    # Create a list of formatted strings
+    formatted_strings = [
+        f"'{get_tool_name(tool)}': {tool.description}" for tool in tools
+    ]
+
+    # Remove duplicates by converting the list to a set and back to a list
+    unique_strings = list(set(formatted_strings))
+
+    # Join the unique strings with newlines
+    return "\n".join(unique_strings)
 
 
 def get_tool_from_name(tool_name: str) -> Type[Tool]:
@@ -41,3 +69,7 @@ def get_tool_from_name(tool_name: str) -> Type[Tool]:
 
 def get_default_tool() -> Type[Tool]:
     return Reason
+
+
+def get_default_tool_name() -> str:
+    return get_tool_name(get_default_tool())

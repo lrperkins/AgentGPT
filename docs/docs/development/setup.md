@@ -12,6 +12,27 @@ The following document will help you set up a local installation of AgentGPT.
 - 🐍 Backend: FastAPI + Python
 - 📚 DB: MySQL through docker with the option of running SQLite locally
 
+## Interactive Setup
+
+We've recently launched an interactive setup tool that will guide you through creating an ENV and running AgentGPT.
+
+- You will need node intalled you can check by running 'node -v' or install [node](https://nodejs.org/en/download)
+
+Simply run the following on a unix system:
+
+```
+git clone https://github.com/reworkd/AgentGPT.git && cd AgentGPT
+./setup.sh
+```
+
+If you are on windows, you can do the following after downloading the repo:
+
+```
+setup.bat
+```
+
+Going this route, you can ignore the below text.
+
 ## ENV
 
 Before you can get started, you need to ensure your ENV is correctly configured. To do this, copy over
@@ -20,8 +41,17 @@ it to `.env` and update values as necessary. Some things to note:
 
 - You will need to update the `OPENAI_API_KEY` with your own value. See the [FAQ](/faq) for details
 - The DB ENV values are taken from definitions in `./docker-compose.yml`
-- To enable web search, set `NEXT_PUBLIC_WEB_SEARCH_ENABLED=true` and use [your own SERP api key](https://serper.dev/)
-  for `SERP_API_KEY`.
+
+:::note Increasing Max Loops
+
+If you want to increase the max loops you agent has locally this can be done by modifying `REWORKD_PLATFORM_MAX_LOOPS`
+variable in your `platform/.env` file. It can also be done by directly modifying the platform's source
+code in `settings.py` (not recommended).
+
+**Note**: Running a large number of loops locally can be result in a higher OpenAI bill.
+
+:::
+
 
 ## Using Docker
 
@@ -49,6 +79,15 @@ backend when enabled.
 cd ./next
 npm install
 npm run dev
+```
+
+In a different window, you can run the following to start the backend:
+
+```bash
+// Backend. Make sure you are at the root of the project
+cd ./platform
+poetry install
+poetry run python -m reworkd_platform
 ```
 
 ## Running the site

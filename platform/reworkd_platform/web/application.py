@@ -11,6 +11,8 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 
 from reworkd_platform.logging import configure_logging
 from reworkd_platform.settings import settings
+from reworkd_platform.web.api.error_handling import platformatic_exception_handler
+from reworkd_platform.web.api.errors import PlatformaticError
 from reworkd_platform.web.api.router import api_router
 from reworkd_platform.web.lifetime import (
     register_shutdown_event,
@@ -71,5 +73,7 @@ def get_app() -> FastAPI:
 
     # Main router for the API.
     app.include_router(router=api_router, prefix="/api")
+
+    app.exception_handler(PlatformaticError)(platformatic_exception_handler)
 
     return app

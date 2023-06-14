@@ -1,34 +1,35 @@
-from typing import Any
+from typing import Any, List
 
-import requests
+import aiohttp
+from fastapi.responses import StreamingResponse as FastAPIStreamingResponse
 
 from reworkd_platform.settings import settings
-from reworkd_platform.web.api.agent.model_settings import ModelSettings
+from reworkd_platform.web.api.agent.tools.stream_mock import stream_string
 from reworkd_platform.web.api.agent.tools.tool import Tool
-from reworkd_platform.web.api.agent.tools.utils import summarize
-
+from reworkd_platform.web.api.agent.tools.utils import CitedSnippet, summarize
 
 # Search google via serper.dev. Adapted from LangChain
 # https://github.com/hwchase17/langchain/blob/master/langchain/utilities
 
 
-def _google_serper_search_results(
-    search_term: str, search_type: str = "search", **kwargs: Any
-) -> dict:
+async def _google_serper_search_results(
+    search_term: str, search_type: str = "search"
+) -> dict[str, Any]:
     headers = {
         "X-API-KEY": settings.serp_api_key or "",
         "Content-Type": "application/json",
     }
     params = {
         "q": search_term,
-        **{key: value for key, value in kwargs.items() if value is not None},
     }
-    response = requests.post(
-        f"https://google.serper.dev/{search_type}", headers=headers, params=params
-    )
-    response.raise_for_status()
-    search_results = response.json()
-    return search_results
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"https://google.serper.dev/{search_type}", headers=headers, params=params
+        ) as response:
+            response.raise_for_status()
+            search_results = await response.json()
+            return search_results
 
 
 class Search(Tool):
@@ -37,19 +38,21 @@ class Search(Tool):
         "news and people.\n"
         "The argument should be the search query."
     )
+    public_description = "Search google for information about current events."
 
-    def __init__(self, model_settings: ModelSettings):
-        super().__init__(model_settings)
+    @staticmethod
+    def available() -> bool:
+        return settings.serp_api_key is not None and settings.serp_api_key != ""
 
-    def call(self, goal: str, task: str, input_str: str) -> str:
-        results = _google_serper_search_results(
+    async def call(
+        self, goal: str, task: str, input_str: str
+    ) -> FastAPIStreamingResponse:
+        results = await _google_serper_search_results(
             input_str,
         )
 
-        k = 6  # Number of results to return
-        max_links = 3  # Number of links to return
-        snippets = []
-        links = []
+        k = 5  # Number of results to return
+        snippets: List[CitedSnippet] = []
 
         if results.get("answerBox"):
             answer_values = []
@@ -62,31 +65,23 @@ class Search(Tool):
                 answer_values.append(", ".join(answer_box.get("snippetHighlighted")))
 
             if len(answer_values) > 0:
-                return "\n".join(answer_values)
+                return stream_string("\n".join(answer_values), True)
 
-        if results.get("knowledgeGraph"):
-            kg = results.get("knowledgeGraph", {})
-            title = kg.get("title")
-            entity_type = kg.get("type")
-            if entity_type:
-                snippets.append(f"{title}: {entity_type}.")
-            description = kg.get("description")
-            if description:
-                snippets.append(description)
-            for attribute, value in kg.get("attributes", {}).items():
-                snippets.append(f"{title} {attribute}: {value}.")
-
-        for result in results["organic"][:k]:
+        for i, result in enumerate(results["organic"][:k]):
+            texts = []
+            link = ""
             if "snippet" in result:
-                snippets.append(result["snippet"])
-            if "link" in result and len(links) < max_links:
-                links.append(result["link"])
+                texts.append(result["snippet"])
+            if "link" in result:
+                link = result["link"]
             for attribute, value in result.get("attributes", {}).items():
-                snippets.append(f"{attribute}: {value}.")
+                texts.append(f"{attribute}: {value}.")
+            snippets.append(CitedSnippet(i + 1, "\n".join(texts), link))
 
         if len(snippets) == 0:
-            return "No good Google Search Result was found"
+            return stream_string("No good Google Search Result was found", True)
 
-        summary = summarize(self.model_settings, goal, task, snippets)
+        return summarize(self.model_settings, goal, task, snippets)
 
-        return f"{summary}\n\nLinks:\n" + "\n".join([f"- {link}" for link in links])
+        # TODO: Stream with formatting
+        # return f"{summary}\n\nLinks:\n" + "\n".join([f"- {link}" for link in links])
